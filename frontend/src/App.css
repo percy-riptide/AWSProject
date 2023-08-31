@@ -1,0 +1,23 @@
+.flex-container {
+  display: flex;
+  flex-direction: row;
+}
+
+.flex-child {
+  flex: 1;
+  padding: 20px;
+}
+
+@media (max-width: 800px) {
+  .flex-container {
+    flex-direction: column;
+  }
+}
+
+.containerStyle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: "20px";
+  flex-direction: "column";
+};

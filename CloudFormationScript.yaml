@@ -1,0 +1,437 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Cloud Formation template for FitFolio.
+
+Resources:
+  BmiTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: bmiDetails
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  FitFolioTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: RegistrationConfirmationv2
+
+  FitFolioApi:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: fitfoliov2
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Code:
+        S3Bucket: fitfoliobucket
+        S3Key: fitfolio.zip
+      Role: arn:aws:iam::967275982632:role/LabRole
+      Timeout: 900
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref FitFolioTopic
+    
+  FitFolio:
+    Type: AWS::ApiGateway::RestApi
+    Role: arn:aws:iam::967275982632:role/LabRole
+    Properties:
+      Name: FitFoliov2
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ApiLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FitFolioApi
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${FitFolio}/*/*"
+
+  StatusResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt FitFolio.RootResourceId
+      PathPart: status
+      RestApiId: !Ref FitFolio
+
+  StatusOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref StatusResource
+      Integration:
+        Type: MOCK
+        IntegrationHttpMethod: OPTIONS
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          "application/json": '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              "application/json": ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            "application/json": "Empty"
+
+  StatusGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref StatusResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FitFolioApi.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: $input.json('$')
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+##############################################################################################################
+  UserResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt FitFolio.RootResourceId
+      PathPart: user
+      RestApiId: !Ref FitFolio
+
+  UserOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref UserResource
+      Integration:
+        Type: MOCK
+        IntegrationHttpMethod: OPTIONS
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          "application/json": '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'PATCH,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              "application/json": ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            "application/json": "Empty"
+
+  UserPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref UserResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FitFolioApi.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PATCH,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: $input.json('$')
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  UserPutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref UserResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: PUT
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FitFolioApi.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PATCH,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: $input.json('$')
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  UserPatchMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref UserResource
+      HttpMethod: PATCH
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: PATCH
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FitFolioApi.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PATCH,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: $input.json('$')
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  UserDeleteMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref UserResource
+      HttpMethod: DELETE
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: DELETE
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FitFolioApi.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PATCH,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: $input.json('$')
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  BmiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt FitFolio.RootResourceId
+      PathPart: bmi
+      RestApiId: !Ref FitFolio
+
+  BmiOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref BmiResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: OPTIONS
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FitFolioApi.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PATCH,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: $input.json('$')
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  BmiPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref BmiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FitFolioApi.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PATCH,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: $input.json('$')
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  BmiPutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FitFolio
+      ResourceId: !Ref BmiResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: PUT
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FitFolioApi.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'PATCH,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: $input.json('$')
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - UserPostMethod
+      - UserPutMethod
+      - UserDeleteMethod
+      - UserPatchMethod
+      - StatusGetMethod
+      - BmiPostMethod
+      - BmiPutMethod
+      - UserOptionsMethod
+      - StatusOptionsMethod
+      - BmiOptionsMethod
+    Properties:
+      RestApiId: !Ref FitFolio
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref FitFolio
+      DeploymentId: !Ref ApiGatewayDeployment
+      StageName: prod
+      Description: Production Stage
+
+  FitFolioInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      KeyName: 'percy-riptide'
+      InstanceType: 't2.micro'
+      SecurityGroups:
+        - !Ref 'FitFolioSecurityGroup'
+      ImageId: 'ami-0f34c5ae932e6f0e4'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo su
+          sudo yum update -y
+          sudo yum install -y docker
+          sudo service docker start
+          docker pull percy2861999/bmicalculator:LATEST
+          docker run -d -e REACT_APP_ENV_VAR=https://${FitFolio}.execute-api.${AWS::Region}.amazonaws.com/prod -p 3000:3000 percy2861999/bmicalculator:LATEST
+    DependsOn: ApiGatewayDeployment
+
+  FitFolioSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Allow SSH'
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          ToPort: '22'
+          FromPort: '22'
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: 'tcp'
+          ToPort: '3000'
+          FromPort: '3000'
+          CidrIp: '0.0.0.0/0'
+
+Outputs:
+  FitFolioTopicArn:
+    Description: ARN of the FitFolioTopic SNS topic
+    Value: !Ref FitFolioTopic
